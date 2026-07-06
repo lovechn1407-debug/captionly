@@ -12,7 +12,10 @@ export default function App() {
   // Global App States
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('groq_api_key') || '');
   const [customProxy, setCustomProxy] = useState(() => localStorage.getItem('groq_cors_proxy') || 'https://corsproxy.io/?');
-  const [disableProxy, setDisableProxy] = useState(() => localStorage.getItem('groq_disable_proxy') === 'true');
+  const [disableProxy, setDisableProxy] = useState(() => {
+    const saved = localStorage.getItem('groq_disable_proxy');
+    return saved !== null ? saved === 'true' : true; // Default to true (bypassing CORS proxy)
+  });
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('groq_model') || 'whisper-large-v3');
   const [selectedLanguage, setSelectedLanguage] = useState(() => localStorage.getItem('groq_language') || 'auto');
 

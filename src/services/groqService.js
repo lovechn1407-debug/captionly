@@ -88,13 +88,32 @@ export async function transcribeAudio(audioBlob, dummyApiKey, options = {}) {
     formData.append('temperature', temperature.toString());
 
     try {
-      const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${currentKey}`
-        },
-        body: formData
-      });
+      let response;
+      
+      try {
+        // Attempt a direct call to the Groq API first (most reliable, avoids CORS proxy bugs)
+        response = await fetch(GROQ_TRANSCRIPTION_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentKey}`
+          },
+          body: formData
+        });
+      } catch (directErr) {
+        // If direct call fails (e.g. network blocks or localhost CORS) and proxy is not disabled, fallback to CORS proxy
+        if (disableProxy) {
+          throw directErr;
+        }
+        console.warn(`Direct API fetch failed (${directErr.message}). Retrying via CORS proxy...`);
+        const proxiedUrl = `${corsProxy}${GROQ_TRANSCRIPTION_URL}`;
+        response = await fetch(proxiedUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentKey}`
+          },
+          body: formData
+        });
+      }
 
       if (!response.ok) {
         let errorMessage = `API error (${response.status})`;
