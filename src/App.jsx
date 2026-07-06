@@ -553,7 +553,7 @@ export default function App() {
   };
 
   // Canvas captions drawing engine
-  const drawCaptionsOnExportCanvas = (ctx, time, width, height) => {
+  const drawCaptionsOnExportCanvas = (ctx, time, width, height, wrapCache = {}) => {
     const active = captions.filter(cap => time >= cap.start && time <= cap.end);
     if (active.length === 0) return;
 
@@ -654,7 +654,12 @@ export default function App() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const linesOfWords = wrapWordTokens(ctx, words, boxWidth);
+      // Use caching to prevent heavy measureText calculations on every single frame!
+      const cacheKey = `${cap.id}_${boxWidth.toFixed(1)}_${fontStr}`;
+      if (!wrapCache[cacheKey]) {
+        wrapCache[cacheKey] = wrapWordTokens(ctx, words, boxWidth);
+      }
+      const linesOfWords = wrapCache[cacheKey];
       
       // Calculate layout line spacing and box height proportionally
       const fontSize = baseFontSize * scale;
@@ -802,6 +807,9 @@ export default function App() {
     setIsPlaying(false);
     video.pause();
 
+    // Cache wrapped text layout lines to avoid recalculating sizes 30 times a second
+    const textWrapCache = {};
+
     const originalMuted = video.muted;
     const originalCurrentTime = video.currentTime;
     const originalLoop = video.loop;
@@ -810,14 +818,29 @@ export default function App() {
     video.loop = false;
     video.currentTime = 0;
 
+    // Restrict maximum export resolution to 1080p (Full HD) to prevent browser memory choke and export lag
+    let exportWidth = video.videoWidth;
+    let exportHeight = video.videoHeight;
+    const MAX_WIDTH = 1920;
+    const MAX_HEIGHT = 1080;
+
+    if (exportWidth > MAX_WIDTH || exportHeight > MAX_HEIGHT) {
+      const ratioX = MAX_WIDTH / exportWidth;
+      const ratioY = MAX_HEIGHT / exportHeight;
+      const scaleFactor = Math.min(ratioX, ratioY);
+      exportWidth = Math.round(exportWidth * scaleFactor);
+      exportHeight = Math.round(exportHeight * scaleFactor);
+      console.log(`Scaling down export resolution from ${video.videoWidth}x${video.videoHeight} to ${exportWidth}x${exportHeight} for performance.`);
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = exportWidth;
+    canvas.height = exportHeight;
     const ctx = canvas.getContext('2d');
 
     const videoStream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
     const audioTrack = videoStream.getAudioTracks()[0];
-    const canvasStream = canvas.captureStream(30);
+    const canvasStream = canvas.captureStream(30); // 30 FPS stream
 
     const outputStream = new MediaStream();
     outputStream.addTrack(canvasStream.getVideoTracks()[0]);
@@ -825,15 +848,19 @@ export default function App() {
       outputStream.addTrack(audioTrack);
     }
 
-    let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 10000000 };
+    // Try H264 MP4 first for maximum cross-platform compatibility, falling back to WebM
+    let options = { mimeType: 'video/mp4;codecs=h264', videoBitsPerSecond: 8000000 };
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/mp4', videoBitsPerSecond: 8000000 };
+    }
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 };
+    }
     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
       options = { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 8000000 };
     }
     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/webm', videoBitsPerSecond: 8000000 };
-    }
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/mp4', videoBitsPerSecond: 8000000 };
+      options = { mimeType: 'video/webm', videoBitsPerSecond: 6000000 };
     }
 
     const recordedChunks = [];
@@ -885,7 +912,7 @@ export default function App() {
       }
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      drawCaptionsOnExportCanvas(ctx, video.currentTime, canvas.width, canvas.height);
+      drawCaptionsOnExportCanvas(ctx, video.currentTime, canvas.width, canvas.height, textWrapCache);
 
       const progress = Math.min(100, Math.floor((video.currentTime / video.duration) * 100));
       setExportProgress(progress);
