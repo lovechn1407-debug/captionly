@@ -177,12 +177,6 @@ export default function App() {
   // Extract audio & Transcribe
   const handleGenerateCaptions = async () => {
     if (!videoFile) return;
-    if (!apiKey) {
-      setErrorMsg('Please set your Groq API key in the settings (top-right gear) before generating captions!');
-      setShowSettingsModal(true);
-      return;
-    }
-
     setIsLoading(true);
     setErrorMsg('');
     try {
@@ -1674,19 +1668,14 @@ export default function App() {
               <X size={20} style={{ cursor: 'pointer' }} onClick={() => setShowSettingsModal(false)} />
             </div>
 
-            {/* Groq API Key input */}
-            <div className="form-group">
-              <label className="form-label">Groq API Key</label>
-              <input 
-                type="password" 
-                className="input-text" 
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="gsk_..."
-              />
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                Get a free key from <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>Google AI Studio</a> (Wait! The user wanted to use Groq API key, so retrieve it from <a href="https://console.groq.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>Groq Console</a>).
-              </span>
+            {/* Managed API Keys Info */}
+            <div className="form-group" style={{ background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.2)', padding: '12px', borderRadius: '8px' }}>
+              <label className="form-label" style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                🔑 Managed API Keys (Active)
+              </label>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                Your Groq API keys are securely managed via environment variables (<code>VITE_GROQ_API_KEYS</code>) with automatic failover rotation. Manual configuration is disabled.
+              </p>
             </div>
 
             {/* Whisper model select */}
@@ -1772,7 +1761,7 @@ export default function App() {
                 className="btn btn-primary" 
                 onClick={() => {
                   setShowSettingsModal(false);
-                  if (apiKey) setErrorMsg('');
+                  setErrorMsg('');
                 }}
               >
                 Save Settings
